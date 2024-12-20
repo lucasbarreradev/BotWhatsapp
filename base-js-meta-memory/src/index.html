@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subir archivo para envío masivo</title>
+</head>
+<body>
+    <h1>Enviar mensajes masivos</h1>
+    <form id="uploadForm" enctype="multipart/form-data" action="https://entirely-model-pigeon.ngrok-free.app/uploadExcel" method="POST">
+        <label for="excelFile">Selecciona tu archivo Excel:</label>
+        <input type="file" id="excelFile" name="excelFile" accept=".xlsx" required>
+        <button type="submit">Subir y procesar</button>
+    </form>
+    
+    
+
+    <script>
+        // Enviar el archivo al servidor
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(e.target);
+
+            // Subir archivo al servidor
+            try {
+            const response = await fetch('https://entirely-model-pigeon.ngrok-free.app/uploadExcel', {
+                method: 'POST',
+                body: formData,
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                alert('Archivo subido y procesado correctamente');
+            } else {
+                alert('Error al subir el archivo: ' + result.message);
+            }
+         } catch (error) {
+        console.error('Error al enviar el archivo:', error);
+        alert('Error al subir el archivo: ' + error.message);
+        }
+    });
+    </script>
+</body>
+</html>

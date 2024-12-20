@@ -2,24 +2,103 @@ import { createBot, createProvider, createFlow, addKeyword } from '@builderbot/b
 import { MemoryDB as Database } from '@builderbot/bot'
 import { MetaProvider as Provider } from '@builderbot/provider-meta'
 import { EVENTS } from '@builderbot/bot'
+import dotenv from 'dotenv';
+import formidable from 'formidable';
+import xlsx from 'xlsx';
+import axios from 'axios';
+import { idleFlow, start, stop } from './idle-custom.js'
+
+dotenv.config(); // Cargar las variables de entorno desde .env
 const PORT = process.env.PORT ?? 3008
+const INACTIVITY_TIME = 4 * 60 * 60 * 1000;
+
+// Función para leer números desde el archivo Excel
+function readNumbersFromExcel(filePath) {
+    try {
+        const workbook = xlsx.readFile(filePath);
+        const sheet = workbook.Sheets[workbook.SheetNames[0]]; // Primera hoja
+        const data = xlsx.utils.sheet_to_json(sheet); // Convierte la hoja a formato JSON
+        console.log('Datos extraídos del Excel:', data);  // Verifica que los datos se extraen correctamente
+
+        const phoneNumbers = data.map(row => row.telefonos).filter(Boolean);  // Filtra cualquier valor nulo o vacío
+        console.log('Números de teléfono extraídos:', phoneNumbers);  // Verifica que los números están siendo extraídos correctamente
+        return phoneNumbers;
+    } catch (error) {
+        console.error('Error leyendo el archivo Excel:', error);
+        throw error;  // Lanza el error para que se maneje en la parte del servidor
+    }
+}
+
+
+// Función para enviar mensajes con plantilla
+const sendMessageTemplate = async (number, templateName, language, variables = []) => {
+    const url = 'https://graph.facebook.com/v21.0/382952714890782/messages';
+    const token = process.env.JWT_TOKEN;
+    const data = {
+        messaging_product: 'whatsapp',
+        to: number,
+        type: 'template',
+        template: {
+            name: templateName,
+            language: { code: language },
+            components: variables.length > 0 ? [
+                {
+                    type: 'body',
+                    parameters: variables.map(variable => ({ type: 'text', text: variable }))
+                
+            }] : []
+        }
+    };
+
+    try {
+        const response = await axios.post(url, data, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        console.log(`Mensaje enviado a ${number} exitosamente:`, response.data);
+    } catch (error) {
+        console.error(`Error enviando mensaje a ${number}:`, error.response?.data || error.message);
+    }
+};
+
+// Función para procesar el envío masivo
+const sendBulkMessages = async (phoneNumbers) => {
+    for (const number of phoneNumbers) {
+        if (number) {
+            await sendMessageTemplate(number, 'plantilla', 'es_ES');
+        }
+    }
+};
+
 
 
 const mensajeBienvenida = addKeyword([EVENTS.WELCOME])
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('Hola, gracias por comunicarte con Gymgenius. Soy el Bot encargado de responder tus consultas. Te interesa saber sobre:')
     .addAnswer([
         '- Productos',
         '- Reventa',
+        '- Mayorista',
         '- Solucionar algún inconveniente',
         '- Nuestra historia',
         '- Contactarnos'
     ],
-        { capture: true }, (ctx, { fallBack }) => {
+        { capture: true },
+            async (ctx, { fallBack, gotoFlow }) => {
+            // Detectar si es una respuesta a mensaje masivo
+            const isReplyToBulkMessage = ctx.body.includes('importadores directos'); //revisar si es asi o con ==
+            if (isReplyToBulkMessage) {
+                // Redirigir al flujo de mensajes masivos
+                return gotoFlow(flow_masivo);
+        }
+            // Flujo normal para clientes que inician la conversación
             const validKeywords = [
                 'productos', 'producto', 'contacto', 'contactarnos', 'contactarno',
                 'nuestra historia', 'historia', 'solucion', 'solucionar inconveniente',
                 'solucionar algún inconveniente', 'inconveniente', 'solucionar',
-                'reventa', 'revender'
+                'reventa', 'revender', 'mayorista', 'mayoristas'
             ];
 
             const userInput = ctx.body.toLowerCase();
@@ -28,6 +107,7 @@ const mensajeBienvenida = addKeyword([EVENTS.WELCOME])
             if (!isValid) {
                 return fallBack('Por favor, ingrese una palabra válida tal cual aparece en la lista.');
             }
+
         });
 
 const media = addKeyword(EVENTS.MEDIA).addAnswer('Lo siento pero no puedo revisar lo que me mandaste. Por favor escribe solo mensajes de texto para poder responder tus dudas.')
@@ -42,6 +122,8 @@ const audio = addKeyword(EVENTS.VOICE_NOTE)
     .addAnswer("Por ahora no puedo escuchar lo que me estás diciendo. Por favor escribe solo mensajes de texto para poder responder tus dudas.")
 
 const productos = addKeyword(['productos', 'producto'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer([
         'Estamos felices de poder ofrecerte una variedad de productos de alta calidad a un excelente precio. Te gustaría saber acerca de:',
         '- Mat',
@@ -54,7 +136,7 @@ const productos = addKeyword(['productos', 'producto'])
         '- Guantes',
         '- Rueda',
         '- Otra pregunta'
-    ], { capture: true }, (ctx, { fallBack, gotoFlow }) => {
+    ], { capture: true }, (ctx, { fallBack, gotoFlow, endFlow }) => {
         const validKeywords = [
             'mat', 'banda de latex', 'banda de látex', 'banda latex', 'banda látex', 'banda de resistencia', 'banda resistencia', 'kit de 5 bandas', 'kit', '5 bandas', 'banda tpe', 'banda tpe con manoplas', 'manopla', 'banda manoplas', 'manoplas', 'banda de tela', 'banda tela', 'tela', 'soga', 'guantes', 'guante', 'rueda', 'ruedas', 'otra pregunta'
         ];
@@ -68,10 +150,15 @@ const productos = addKeyword(['productos', 'producto'])
         if (userInput.toLowerCase() == 'otra pregunta') {
             return gotoFlow(mensajeBienvenida)
         }
+        if (ctx?.idle) {
+            return endFlow('Muchas gracias por su consulta.')
+        }
     });
 const mat = addKeyword('mat')
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('¿Quieres llevar tu entrenamiento al siguiente nivel? Usa el código GYMGENIUS para obtener un 10% de descuento en nuestra tienda online.')
-    
+
     .addAnswer(['Rosa: Explorá la revolución del bienestar con nuestro Mat de 10 mm color rosa claro. Gracias a su base acolchada, este producto te ofrece una experiencia muy confortable. Su suave tonalidad evoca la calma que tu entrenamiento necesita. Además, el material con el que está fabricado es antideslizante para asegurar tu performance. Y tiene un generoso tamaño de 183 cm x 61 cm.',
         'Este es el link donde puede ingresar para realizar la compra https://www.gymgenius.com.ar/MLA-1425287707-mat-fitness-premium-gym-pilates-o-yoga-gymgenius-10mm-rosa-_JM#position=8&search_layout=stack&type=item&tracking_id=51c95faa-e595-418f-a8fe-d23bf0ab32de'
     ])
@@ -85,12 +172,12 @@ const mat = addKeyword('mat')
         '- Si',
         '- No'
     ],
-        { capture: true }, (ctx, { fallBack, gotoFlow, endFlow }) => {
+        { capture: true }, (ctx, { fallBack, gotoFlow,endFlow }) => {
             if (ctx.body.toLowerCase() == 'si') {
                 return gotoFlow(productos)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -99,6 +186,8 @@ const mat = addKeyword('mat')
     )
 
 const bandaLatex = addKeyword(['banda de latex', 'banda de látex', 'banda latex', 'banda látex'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('¿Quieres llevar tu entrenamiento al siguiente nivel? Usa el código GYMGENIUS para obtener un 10% de descuento en nuestra tienda online.')
     .addAnswer(['Azul: Potenciá tu entrenamiento con nuestras Bandas GymGenius. Diseñado para ofrecer versatilidad y resistencia, este producto es tu compañero ideal para alcanzar tus metas fitness.',
         'Con dimensiones compactas de 25 cm x 5 cm, se adapta a tu variedad de ejercicios. Y con su espesor de 0.5 mm se ajusta a tu nivel de intensidad brindando una resistencia inicial perfecta para tu rutina.',
@@ -124,7 +213,7 @@ const bandaLatex = addKeyword(['banda de latex', 'banda de látex', 'banda latex
                 return gotoFlow(productos)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -133,6 +222,8 @@ const bandaLatex = addKeyword(['banda de latex', 'banda de látex', 'banda latex
     )
 
 const bandaTpe = addKeyword(['banda tpe', 'banda tpe con manoplas', 'manopla', 'banda manoplas', 'manoplas'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('¿Quieres llevar tu entrenamiento al siguiente nivel? Usa el código GYMGENIUS para obtener un 10% de descuento en nuestra tienda online.')
     .addAnswer(['Verde: Optimizá tu entrenamiento con nuestra Banda de Resistencia TPE GymGenius.',
         'Acompañada de dos manoplas ergonómicas de 12 cm que añaden comodidad y un agarre firme a tu rutina y con una longitud de 120 cm, este accesorio redefine tu rutina de ejercicios.',
@@ -161,7 +252,7 @@ const bandaTpe = addKeyword(['banda tpe', 'banda tpe con manoplas', 'manopla', '
                 return gotoFlow(productos)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -170,6 +261,8 @@ const bandaTpe = addKeyword(['banda tpe', 'banda tpe con manoplas', 'manopla', '
     )
 
 const kit5Bandas = addKeyword(['kit de 5 bandas', 'kit', '5 bandas'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('¿Quieres llevar tu entrenamiento al siguiente nivel? Usa el código GYMGENIUS para obtener un 10% de descuento en nuestra tienda online.')
     .addAnswer(['Transformá tu rutina de ejercicios con nuestro Kit de 5 Bandas de Entrenamiento Gym Genius. Este conjunto versátil, diseñado para desafiar y tonificar, te ofrece una gama completa de resistencias para potenciar tu entrenamiento según tus necesidades y metas.',
         'Experimentá niveles de resistencia personalizados con cinco espesores distintos según sus colores:',
@@ -192,7 +285,7 @@ const kit5Bandas = addKeyword(['kit de 5 bandas', 'kit', '5 bandas'])
                 return gotoFlow(productos)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -201,6 +294,8 @@ const kit5Bandas = addKeyword(['kit de 5 bandas', 'kit', '5 bandas'])
     )
 
 const bandaResistencia = addKeyword(['banda resistencia', 'banda de resistencia'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('¿Quieres llevar tu entrenamiento al siguiente nivel? Usa el código GYMGENIUS para obtener un 10% de descuento en nuestra tienda online.')
     .addAnswer(['Roja: Elevá tu rutina de entrenamiento con nuestra Banda de Resistencia GymGenius',
         'Diseñado en látex de alta calidad para desafiar tus límites, este producto ofrece la combinación perfecta entre versatilidad y durabilidad.',
@@ -232,7 +327,7 @@ const bandaResistencia = addKeyword(['banda resistencia', 'banda de resistencia'
                 return gotoFlow(productos)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -241,6 +336,8 @@ const bandaResistencia = addKeyword(['banda resistencia', 'banda de resistencia'
     )
 
 const bandaTela = addKeyword(['banda de tela', 'banda tela', 'tela', 'banda de telas'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('¿Quieres llevar tu entrenamiento al siguiente nivel? Usa el código GYMGENIUS para obtener un 10% de descuento en nuestra tienda online.')
     .addAnswer(['Azul: Llevá tu entrenamiento al siguiente nivel con nuestras Bandas de Tela GymGenius. Diseñadas para potenciar tu resistencia y flexibilidad, este producto es el accesorio perfecto para tu rutina de ejercicio.',
         'Con un tamaño de 66 cm x 7 cm te ofrece el ajuste perfecto para las variaciones que tenga tu performance.',
@@ -263,7 +360,7 @@ const bandaTela = addKeyword(['banda de tela', 'banda tela', 'tela', 'banda de t
                 return gotoFlow(productos)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -271,6 +368,8 @@ const bandaTela = addKeyword(['banda de tela', 'banda tela', 'tela', 'banda de t
         }
     )
 const soga = addKeyword(['soga', 'sogas'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('¿Quieres llevar tu entrenamiento al siguiente nivel? Usa el código GYMGENIUS para obtener un 10% de descuento en nuestra tienda online.')
     .addAnswer(['Potenciá tu entrenamiento con nuestra Soga GymGenius. Con manoplas ergonómicas que brindan comodidad y confianza, este producto de 277 cm recubierto de PVC redefine tu rutina de ejercicio.',
         'Ya no es solo una cuerda de ejercicio, es tu compañera de resistencia ideal.',
@@ -285,7 +384,7 @@ const soga = addKeyword(['soga', 'sogas'])
                 return gotoFlow(productos)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -294,6 +393,8 @@ const soga = addKeyword(['soga', 'sogas'])
     )
 
 const guantes = addKeyword(['guante', 'guantes'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('¿Quieres llevar tu entrenamiento al siguiente nivel? Usa el código GYMGENIUS para obtener un 10% de descuento en nuestra tienda online.')
     .addAnswer(['Potenciá tu rutina de entrenamiento con nuestro Guante GymGenius.',
         'Diseñado para ofrecer comodidad y funcionalidad, este accesorio presenta orificios estratégicamente ubicados para una mejor respiración durante tu performance.',
@@ -321,7 +422,7 @@ const guantes = addKeyword(['guante', 'guantes'])
                 return gotoFlow(productos)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -330,6 +431,8 @@ const guantes = addKeyword(['guante', 'guantes'])
     )
 
 const rueda = addKeyword(['rueda', 'ruedas'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('¿Quieres llevar tu entrenamiento al siguiente nivel? Usa el código GYMGENIUS para obtener un 10% de descuento en nuestra tienda online.')
     .addAnswer(['Potenciá tu rutina de abdominales con nuestra Rueda de Ejercicios GymGenius.',
         'Fabricada con polipropileno y caucho de alta calidad, esta rueda es tu compañera perfecta para esculpir un núcleo fuerte y definido. Mediante su agarre ergonómico, este producto ofrece comodidad y estabilidad mientras te desafías a vos mismo en cada repetición. La combinación de materiales duraderos garantiza una resistencia excepcional y un rendimiento consistente durante tu entrenamiento.',
@@ -347,7 +450,7 @@ const rueda = addKeyword(['rueda', 'ruedas'])
                 return gotoFlow(productos)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -356,6 +459,8 @@ const rueda = addKeyword(['rueda', 'ruedas'])
     )
 
 const contactarnos = addKeyword(['contacto', 'contactarnos', 'contactarno'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('Ser una marca líder en equipamiento deportivo y de yoga, ofreciendo productos de alta calidad, innovadores y accesibles para facilitar rutinas en el hogar, contribuyendo de esta manera al bienestar físico y mental de nuestros clientes. ¿Te gustaría hablar con nosotros? https://wa.link/yvvvrt')
     .addAnswer(['¿Quiere realizar otra consulta?',
         '- Si',
@@ -366,7 +471,7 @@ const contactarnos = addKeyword(['contacto', 'contactarnos', 'contactarno'])
                 return gotoFlow(mensajeBienvenida)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -375,7 +480,9 @@ const contactarnos = addKeyword(['contacto', 'contactarnos', 'contactarno'])
     )
 
 const nuestraHistoria = addKeyword(['nuestra historia', 'historia'])
-    .addAnswer('Somos una tienda online argentina. A través de una selección premium de equipamiento deportivo y de yoga, te brindamos una experiencia transformadora que elevará tu rendimiento y te permitirá encontrar el equilibrio mente-cuerpo que tanto buscás. Mediante envíos rápidos y métodos de pago confiables, facilitamos tu acceso a productos high quality. ¿Te gustaría hablar con nosotros? https://wa.link/yvvvrt')
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
+    .addAnswer('Somos una marca que se caracteriza en vender una selección premium de equipamiento deportivo y de yoga al mejor precio del mercado, te brindamos una experiencia transformadora que elevará tu rendimiento y te permitirá encontrar el equilibrio mente-cuerpo que tanto buscás. Al ser importadores directos, podemos ser competitivos con los precios y brindar la posibilidad de distribuir los productos mediante envíos rápidos y métodos de pago confiables en nuestra tienda online y venta física. ¿Te gustaría hablar con nosotros? https://wa.link/yvvvrt')
     .addAnswer(['¿Quiere realizar otra consulta?',
         '- Si',
         '- No'
@@ -385,7 +492,7 @@ const nuestraHistoria = addKeyword(['nuestra historia', 'historia'])
                 return gotoFlow(mensajeBienvenida)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -394,6 +501,8 @@ const nuestraHistoria = addKeyword(['nuestra historia', 'historia'])
     )
 
 const solucionarInconveniente = addKeyword(['solucion', 'solucionar inconveniente', 'solucionar algun inconveniente', 'inconveniente', 'solucionar'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('GymGenius ofrece garantía en todos sus productos, cubriendo cualquier defecto de fabricación o mal funcionamiento al momento de recibir tu pedido. En este caso podés devolverlo dentro de los 15 días posteriores a la recepción, siempre que el producto esté en perfectas condiciones y con su embalaje original. En esas condiciones te reembolsaremos el importe íntegro de tu compra. ¿Te gustaría hablar con nosotros? https://wa.link/yvvvrt')
     .addAnswer(['¿Quiere realizar otra consulta?',
         '- Si',
@@ -404,7 +513,7 @@ const solucionarInconveniente = addKeyword(['solucion', 'solucionar inconvenient
                 return gotoFlow(mensajeBienvenida)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -413,6 +522,8 @@ const solucionarInconveniente = addKeyword(['solucion', 'solucionar inconvenient
     )
 
 const reventa = addKeyword(['reventa', 'revender'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('Nuestra visión se basa en expandir nuestra marca, consolidando nuestra presencia y posicionamiento en el mercado del equipamiento deportivo y de yoga, generando un impacto positivo en la salud física, mental y emocional de la sociedad, a la vez que en el medio ambiente. Escribinos a este Whatsapp para tener un contacto directo https://wa.link/yvvvrt ')
     .addAnswer(['¿Quiere realizar otra consulta?',
         '- Si',
@@ -423,7 +534,7 @@ const reventa = addKeyword(['reventa', 'revender'])
                 return gotoFlow(mensajeBienvenida)
             }
             else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta')
+                return endFlow('Muchas gracias por su consulta.')
             }
             else {
                 return fallBack('Por favor, ingrese una palabra válida')
@@ -431,14 +542,54 @@ const reventa = addKeyword(['reventa', 'revender'])
         }
     )
 
+const mayorista = addKeyword(['mayorista', 'mayoristas'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
+    .addAnswer('Gracias por tu interés. En este link encontrarás la lista de precio de nuestros productos disponibles: https://docs.google.com/spreadsheets/d/1bsasUjRq3l5zn9-wA0Sz2E-42F0jAkx1hd7-bv0ad48/edit?usp=sharing')
+    .addAnswer('En el siguiente link podrás ingresar al catálogo de WP para armar un carrito con tu pedido Ver la solicitud del pedido y enviarla a un vendedor: https://wa.me/c/5493537311506')
+    .addAnswer(['¿Quiere realizar otra consulta?',
+        '- Si',
+        '- No'
+    ],
+        { capture: true }, (ctx, { fallBack, gotoFlow, endFlow }) => {
+            if (ctx.body.toLowerCase() == 'si') {
+                return gotoFlow(mensajeBienvenida)
+            }
+            else if (ctx.body.toLowerCase() == 'no') {
+                return endFlow('Muchas gracias por su consulta.')
+            }
+            else {
+                return fallBack('Por favor, ingrese una palabra válida')
+            }
+        }
+    )
+
+const flow_masivo = addKeyword(['si', 'sí'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
+    .addAnswer('Gracias por tu interés. En este link encontrarás la lista de precio de nuestros productos disponibles: https://docs.google.com/spreadsheets/d/1bsasUjRq3l5zn9-wA0Sz2E-42F0jAkx1hd7-bv0ad48/edit?usp=sharing')
+    .addAnswer(['¿Te gustaría realizar tu pedido a un vendedor?',
+        'Respondé: PEDIDO para brindarte asesoramiento.'
+    ],
+        { capture: true }, (ctx, { fallBack, endFlow }) => {
+            if (ctx.body.toLowerCase() == 'pedido') {
+                return endFlow('En el siguiente link podrás ingresar al catálogo de WP para armar un carrito con tu pedido Ver la solicitud del pedido y enviarla a un vendedor: https://wa.me/c/5493537311506')
+            }
+            else if (ctx.body.toLowerCase() == 'no') {
+                return endFlow('Nos gustaría resolver tus dudas mediante una comunicación personalizada con un vendedor. En el siguiente link abrirás un chat directo con un vendedor: https://wa.link/duuzm8')
+            }
+            else return fallBack('Por favor, ingrese una palabra válida')
+        }
+    );
+    
 
 const main = async () => {
-    const adapterFlow = createFlow([mensajeBienvenida, productos, contactarnos, nuestraHistoria, solucionarInconveniente, reventa, mat, bandaLatex, bandaTpe, kit5Bandas, bandaResistencia, bandaTela, soga, guantes, rueda, media, documento, localizacion, audio])
+    const adapterFlow = createFlow([mensajeBienvenida, productos, contactarnos, nuestraHistoria, solucionarInconveniente, reventa, mat, bandaLatex, bandaTpe, kit5Bandas, bandaResistencia, bandaTela, soga, guantes, rueda, media, documento, localizacion, audio, flow_masivo, mayorista, idleFlow])
     const adapterProvider = createProvider(Provider, {
         jwtToken: process.env.JWT_TOKEN,
         numberId: process.env.NUMBER_ID,
         verifyToken: process.env.VERIFY_TOKEN,
-        version: 'v19.0'
+        version: 'v21.0'
     })
     const adapterDB = new Database()
 
@@ -486,6 +637,49 @@ const main = async () => {
             return res.end(JSON.stringify({ status: 'ok', number, intent }))
         })
     )
+
+    adapterProvider.server.post('/uploadExcel', async (req, res) => {
+        const form = formidable();
+    
+        form.parse(req, (err, fields, files) => {
+            if (err) {
+                console.error('Error procesando la subida:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'Error procesando la subida' }));
+            }
+        
+            console.log('Archivos recibidos:', files);  // Esto debería mostrar todos los archivos recibidos
+            const filePath = files.excelFile ? files.excelFile[0]?.filepath : null;  // Asegúrate de acceder a la propiedad correcta
+            
+            if (!filePath) {
+                console.error('No se ha recibido el archivo');
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ success: false, message: 'No se ha recibido el archivo' }));
+            }
+            
+            console.log('Archivo recibido con éxito, ruta:', filePath);
+        
+            // Proceder con la lectura del archivo
+            try {
+                const phoneNumbers = readNumbersFromExcel(filePath);  // Lógica para leer números del archivo
+                sendBulkMessages(phoneNumbers)  // Enviar mensajes en masa
+                    .then(() => {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: true, message: 'Archivo procesado y mensajes enviados' }));
+                    })
+                    .catch((error) => {
+                        console.error('Error enviando mensajes:', error);
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, message: 'Error enviando mensajes' }));
+                    });
+            } catch (error) {
+                console.error('Error procesando archivo:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: 'Error procesando el archivo' }));
+            }
+    });
+    });        
+    
 
     httpServer(+PORT)
 }
