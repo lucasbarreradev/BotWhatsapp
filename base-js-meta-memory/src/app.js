@@ -159,14 +159,8 @@ const mat = addKeyword('mat')
     .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('¿Quieres llevar tu entrenamiento al siguiente nivel? Usa el código GYMGENIUS para obtener un 10% de descuento en nuestra tienda online.')
 
-    .addAnswer(['Rosa: Explorá la revolución del bienestar con nuestro Mat de 10 mm color rosa claro. Gracias a su base acolchada, este producto te ofrece una experiencia muy confortable. Su suave tonalidad evoca la calma que tu entrenamiento necesita. Además, el material con el que está fabricado es antideslizante para asegurar tu performance. Y tiene un generoso tamaño de 183 cm x 61 cm.',
-        'Este es el link donde puede ingresar para realizar la compra https://www.gymgenius.com.ar/MLA-1425287707-mat-fitness-premium-gym-pilates-o-yoga-gymgenius-10mm-rosa-_JM#position=8&search_layout=stack&type=item&tracking_id=51c95faa-e595-418f-a8fe-d23bf0ab32de'
-    ])
-    .addAnswer(['Gris: Explorá la revolución del bienestar con nuestro Mat de 10 mm color gris.  Gracias a su base acolchada, este producto te ofrece una experiencia muy confortable. Su suave tonalidad evoca la calma que tu entrenamiento necesita. Además, el material con el que está fabricado es antideslizante para asegurar tu performance. Y tiene un generoso tamaño de 183 cm x 61 cm.',
-        'Este es el link donde puede ingresar para realizar la compra https://www.gymgenius.com.ar/MLA-1425300483-mat-fitness-premium-gym-pilates-o-yoga-gymgenius-10mm-gris-_JM#position=1&search_layout=stack&type=item&tracking_id=78e956fd-f58b-4193-84e0-401625ae7d5f'
-    ])
-    .addAnswer(['Violeta: Explorá la revolución del bienestar con nuestro Mat de 10 mm color violeta.  Gracias a su base acolchada, este producto te ofrece una experiencia muy confortable. Su suave tonalidad evoca la calma que tu entrenamiento necesita. Además, el material con el que está fabricado es antideslizante para asegurar tu performance. Y tiene un generoso tamaño de 183 cm x 61 cm.',
-        'Este es el link donde puede ingresar para realizar la compra https://www.gymgenius.com.ar/MLA-1425313579-mat-fitness-premium-gym-pilates-yoga-gymgenius-10mm-violeta-_JM#position=4&search_layout=stack&type=item&tracking_id=da53dad0-5601-493b-bee1-95afd539fd39'
+    .addAnswer(['Explorá la revolución del bienestar con nuestro Mat de 10 mm en colores rosa claro, gris y violeta. Gracias a su base acolchada, este producto te ofrece una experiencia muy confortable. Su suave tonalidad evoca la calma que tu entrenamiento necesita. Además, el material con el que está fabricado es antideslizante para asegurar tu performance. Y tiene un generoso tamaño de 183 cm x 61 cm.',
+        'Este es el link donde puede ingresar para realizar la compra https://www.gymgenius.com.ar/mat'
     ])
     .addAnswer(['¿Quiere consultar sobre otro producto?',
         '- Si',
