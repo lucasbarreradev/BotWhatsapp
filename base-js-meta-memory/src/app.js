@@ -76,10 +76,9 @@ const sendBulkMessages = async (phoneNumbers) => {
 
 const mensajeBienvenida = addKeyword([EVENTS.WELCOME])
     .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
-    .addAnswer('Hola, gracias por comunicarte con Gymgenius. Soy el Bot encargado de responder tus consultas. Te interesa saber sobre:')
+    .addAnswer('Hola, gracias por comunicarte con Gymgenius. Este es un canal de respuestas 24/7. Necesitás información acerca de:')
     .addAnswer([
         '- Productos',
-        '- Reventa',
         '- Mayorista',
         '- Solucionar algún inconveniente',
         '- Nuestra historia',
@@ -98,7 +97,7 @@ const mensajeBienvenida = addKeyword([EVENTS.WELCOME])
                 'productos', 'producto', 'contacto', 'contactarnos', 'contactarno',
                 'nuestra historia', 'historia', 'solucion', 'solucionar inconveniente',
                 'solucionar algún inconveniente', 'inconveniente', 'solucionar',
-                'reventa', 'revender', 'mayorista', 'mayoristas'
+                'mayorista', 'mayoristas'
             ];
 
             const userInput = ctx.body.toLowerCase();
@@ -515,31 +514,9 @@ const solucionarInconveniente = addKeyword(['solucion', 'solucionar inconvenient
         }
     )
 
-const reventa = addKeyword(['reventa', 'revender'])
-    .addAction(async (ctx) => stop(ctx))
-    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
-    .addAnswer('Nuestra visión se basa en expandir nuestra marca, consolidando nuestra presencia y posicionamiento en el mercado del equipamiento deportivo y de yoga, generando un impacto positivo en la salud física, mental y emocional de la sociedad, a la vez que en el medio ambiente. Escribinos a este Whatsapp para tener un contacto directo https://wa.link/yvvvrt ')
-    .addAnswer(['¿Quiere realizar otra consulta?',
-        '- Si',
-        '- No'
-    ],
-        { capture: true }, (ctx, { fallBack, gotoFlow, endFlow }) => {
-            if (ctx.body.toLowerCase() == 'si') {
-                return gotoFlow(mensajeBienvenida)
-            }
-            else if (ctx.body.toLowerCase() == 'no') {
-                return endFlow('Muchas gracias por su consulta.')
-            }
-            else {
-                return fallBack('Por favor, ingrese una palabra válida')
-            }
-        }
-    )
-
 const mayorista = addKeyword(['mayorista', 'mayoristas'])
     .addAction(async (ctx) => stop(ctx))
     .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
-    .addAnswer('Gracias por tu interés. En este link encontrarás la lista de precio de nuestros productos disponibles: https://docs.google.com/spreadsheets/d/1bsasUjRq3l5zn9-wA0Sz2E-42F0jAkx1hd7-bv0ad48/edit?usp=sharing')
     .addAnswer('En el siguiente link podrás ingresar al catálogo de WP para armar un carrito con tu pedido Ver la solicitud del pedido y enviarla a un vendedor: https://wa.me/c/5493537311506')
     .addAnswer(['¿Quiere realizar otra consulta?',
         '- Si',
@@ -578,7 +555,7 @@ const flow_masivo = addKeyword(['si', 'sí'])
     
 
 const main = async () => {
-    const adapterFlow = createFlow([mensajeBienvenida, productos, contactarnos, nuestraHistoria, solucionarInconveniente, reventa, mat, bandaLatex, bandaTpe, kit5Bandas, bandaResistencia, bandaTela, soga, guantes, rueda, media, documento, localizacion, audio, flow_masivo, mayorista, idleFlow])
+    const adapterFlow = createFlow([mensajeBienvenida, productos, contactarnos, nuestraHistoria, solucionarInconveniente, mat, bandaLatex, bandaTpe, kit5Bandas, bandaResistencia, bandaTela, soga, guantes, rueda, media, documento, localizacion, audio, flow_masivo, mayorista, idleFlow])
     const adapterProvider = createProvider(Provider, {
         jwtToken: process.env.JWT_TOKEN,
         numberId: process.env.NUMBER_ID,
