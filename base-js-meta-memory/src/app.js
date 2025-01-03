@@ -7,7 +7,7 @@ import formidable from 'formidable';
 import xlsx from 'xlsx';
 import axios from 'axios';
 import { idleFlow, start, stop } from './idle-custom.js'
-
+import cors from 'cors';
 dotenv.config(); // Cargar las variables de entorno desde .env
 const PORT = process.env.PORT ?? 3008
 const INACTIVITY_TIME = 4 * 60 * 60 * 1000;
@@ -61,17 +61,25 @@ const sendMessageTemplate = async (number, templateName, language, variables = [
         console.log(`Mensaje enviado a ${number} exitosamente:`, response.data);
     } catch (error) {
         console.error(`Error enviando mensaje a ${number}:`, error.response?.data || error.message);
+        return;
     }
 };
 
 // Función para procesar el envío masivo
 const sendBulkMessages = async (phoneNumbers) => {
     for (const number of phoneNumbers) {
-        if (number) {
-            await sendMessageTemplate(number, 'plantilla', 'es_ES');
+        try {
+            if (number) {
+                await sendMessageTemplate(number, 'plantilla', 'es_ES');
+            }
+        } catch (error) {
+            console.error(`Error al enviar mensaje al número ${number}:`, error);
+            // Si deseas detener el envío de mensajes al encontrar un error, puedes usar return aquí
+            return; 
         }
     }
 };
+
 
 
 
@@ -609,6 +617,8 @@ const main = async () => {
             return res.end(JSON.stringify({ status: 'ok', number, intent }))
         })
     )
+
+    adapterProvider.server.use(cors());
 
     adapterProvider.server.post('/uploadExcel', async (req, res) => {
         const form = formidable();
