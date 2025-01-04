@@ -11,7 +11,6 @@ import cors from 'cors';
 dotenv.config(); // Cargar las variables de entorno desde .env
 const PORT = process.env.PORT ?? 3008
 const INACTIVITY_TIME = 4 * 60 * 60 * 1000;
-const INACTIVITY_TIME_MASIVO = 24 * 60 * 60 * 1000;
 
 // Función para leer números desde el archivo Excel
 function readNumbersFromExcel(filePath) {
@@ -74,7 +73,6 @@ const sendBulkMessages = async (phoneNumbers) => {
             }
         } catch (error) {
             console.error(`Error al enviar mensaje al número ${number}:`, error);
-            // Si deseas detener el envío de mensajes al encontrar un error, puedes usar return aquí
             return; 
         }
     }
@@ -546,7 +544,7 @@ const mayorista = addKeyword(['mayorista', 'mayoristas'])
 
 const flow_masivo = addKeyword(['si', 'sí'])
     .addAction(async (ctx) => stop(ctx))
-    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME_MASIVO))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
     .addAnswer('Gracias por tu interés. En este link encontrarás la lista de precio de nuestros productos disponibles: https://docs.google.com/spreadsheets/d/1bsasUjRq3l5zn9-wA0Sz2E-42F0jAkx1hd7-bv0ad48/edit?usp=sharing')
     .addAnswer(['¿Te gustaría realizar tu pedido a un vendedor?',
         'Respondé: PEDIDO para brindarte asesoramiento.'
