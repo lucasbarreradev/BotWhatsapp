@@ -105,7 +105,7 @@ const mensajeBienvenida = addKeyword([EVENTS.WELCOME])
                 'productos', 'producto', 'contacto', 'contactarnos', 'contactarno',
                 'nuestra historia', 'historia', 'solucion', 'solucionar inconveniente',
                 'solucionar algún inconveniente', 'inconveniente', 'solucionar',
-                'mayorista', 'mayoristas'
+                'mayorista', 'mayoristas', 'preventa', 'preventas'
             ];
 
             const userInput = ctx.body.toLowerCase();
