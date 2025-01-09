@@ -87,6 +87,7 @@ const mensajeBienvenida = addKeyword([EVENTS.WELCOME])
     .addAnswer([
         '- Productos',
         '- Mayorista',
+        '- Preventa',
         '- Solucionar algún inconveniente',
         '- Nuestra historia',
         '- Contactarnos'
@@ -542,6 +543,27 @@ const mayorista = addKeyword(['mayorista', 'mayoristas'])
         }
     )
 
+    const preventa = addKeyword(['preventa', 'preventas'])
+    .addAction(async (ctx) => stop(ctx))
+    .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
+    .addAnswer('Un nuevo pedido está por llegar. Comprá tu nuevo producto Gymgenius a precio exclusivo. Descubrilos en este link https://drive.google.com/drive/folders/1DjLxmeaQ5qZAl6S7C9Doneo5ooXjtMby?usp=sharing')
+    .addAnswer(['¿Quiere realizar otra consulta?',
+        '- Si',
+        '- No'
+    ],
+        { capture: true }, (ctx, { fallBack, gotoFlow, endFlow }) => {
+            if (ctx.body.toLowerCase() == 'si') {
+                return gotoFlow(mensajeBienvenida)
+            }
+            else if (ctx.body.toLowerCase() == 'no') {
+                return endFlow('Muchas gracias por su consulta.')
+            }
+            else {
+                return fallBack('Por favor, ingrese una palabra válida')
+            }
+        }
+    )    
+
 const flow_masivo = addKeyword(['si', 'sí'])
     .addAction(async (ctx) => stop(ctx))
     .addAction(async (ctx, { gotoFlow }) => start(ctx, gotoFlow, INACTIVITY_TIME))
@@ -562,7 +584,7 @@ const flow_masivo = addKeyword(['si', 'sí'])
     
 
 const main = async () => {
-    const adapterFlow = createFlow([mensajeBienvenida, productos, contactarnos, nuestraHistoria, solucionarInconveniente, mat, bandaLatex, bandaTpe, kit5Bandas, bandaResistencia, bandaTela, soga, guantes, rueda, media, documento, localizacion, audio, flow_masivo, mayorista, idleFlow])
+    const adapterFlow = createFlow([mensajeBienvenida, productos, contactarnos, nuestraHistoria, solucionarInconveniente, mat, bandaLatex, bandaTpe, kit5Bandas, bandaResistencia, bandaTela, soga, guantes, rueda, media, documento, localizacion, audio, flow_masivo, mayorista, preventa, idleFlow])
     const adapterProvider = createProvider(Provider, {
         jwtToken: process.env.JWT_TOKEN,
         numberId: process.env.NUMBER_ID,
