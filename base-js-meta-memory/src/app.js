@@ -58,22 +58,29 @@ const sendMessageTemplate = async (number, templateName, language, variables = [
             }
         });
         console.log(`Mensaje enviado a ${number} exitosamente:`, response.data);
+        return true
     } catch (error) {
         console.error(`Error enviando mensaje a ${number}:`, error.response?.data || error.message);
-        return;
+        return false;
     }
 };
 
 // Función para procesar el envío masivo
 const sendBulkMessages = async (phoneNumbers) => {
+    const blacklist = new Set(); // Lista de números que fallaron
     for (const number of phoneNumbers) {
+        if (blacklist.has(number)) {
+            console.warn(`Número ${number} está en la lista de exclusión. No se intentará enviar.`);
+            continue;
+        }
         try {
-            if (number) {
-                await sendMessageTemplate(number, 'plantilla', 'es_ES');
+            const success = await sendMessageTemplate(number, 'plantilla', 'es_ES');
+            if (!success) {
+                blacklist.add(number); // Agregar a la lista de exclusión si falla
+                console.warn(`Número ${number} agregado a la lista de exclusión.`);
             }
         } catch (error) {
-            console.error(`Error al enviar mensaje al número ${number}:`, error);
-            return; 
+            console.error(`Error inesperado al procesar el número ${number}:`, error);
         }
     }
 };
