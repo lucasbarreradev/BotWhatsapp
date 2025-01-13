@@ -29,9 +29,13 @@ function readNumbersFromExcel(filePath) {
     }
 }
 
-
+const excludedNumbers = new Set(); // Lista para almacenar números fallidos
 // Función para enviar mensajes con plantilla
 const sendMessageTemplate = async (number, templateName, language, variables = []) => {
+    if (excludedNumbers.has(number)) {
+        console.log(`Número ${number} está excluido. No se intentará enviar.`);
+        return;
+    }
     const url = 'https://graph.facebook.com/v21.0/382952714890782/messages';
     const token = process.env.JWT_TOKEN;
     const data = {
@@ -58,27 +62,21 @@ const sendMessageTemplate = async (number, templateName, language, variables = [
             }
         });
         console.log(`Mensaje enviado a ${number} exitosamente:`, response.data);
-        return true
     } catch (error) {
         console.error(`Error enviando mensaje a ${number}:`, error.response?.data || error.message);
-        return false;
+
+        if (error.response?.data?.error?.message.includes("Undeliverable")) {
+            console.log(`Número ${number} marcado como excluido debido a mensajes no entregables.`);
+            excludedNumbers.add(number); // Agregar a la lista de excluidos
+        }
     }
 };
 
 // Función para procesar el envío masivo
 const sendBulkMessages = async (phoneNumbers) => {
-    const blacklist = new Set(); // Lista de números que fallaron
     for (const number of phoneNumbers) {
-        if (blacklist.has(number)) {
-            console.warn(`Número ${number} está en la lista de exclusión. No se intentará enviar.`);
-            continue;
-        }
         try {
-            const success = await sendMessageTemplate(number, 'plantilla', 'es_ES');
-            if (!success) {
-                blacklist.add(number); // Agregar a la lista de exclusión si falla
-                console.warn(`Número ${number} agregado a la lista de exclusión.`);
-            }
+            await sendMessageTemplate(number, 'plantilla', 'es_ES');
         } catch (error) {
             console.error(`Error inesperado al procesar el número ${number}:`, error);
         }
