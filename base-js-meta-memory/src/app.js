@@ -643,7 +643,7 @@ const main = async () => {
         })
     )
 
-    adapterProvider.server.use(cors());
+    adapterProvider.server.use(cors({ origin: 'http://127.0.0.1:5500' }));
 
     adapterProvider.server.post('/uploadExcel', async (req, res) => {
         const form = formidable();
