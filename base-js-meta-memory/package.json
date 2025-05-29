@@ -11,11 +11,13 @@
   },
   "keywords": [],
   "dependencies": {
+    "@builderbot-plugins/openai-assistants": "^0.0.2",
     "@builderbot/bot": "1.1.6",
     "@builderbot/provider-meta": "1.1.6",
     "dotenv": "^16.4.7",
     "formidable": "^3.5.2",
     "fs": "^0.0.1-security",
+    "openai": "^4.103.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
