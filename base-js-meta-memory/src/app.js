@@ -18,16 +18,24 @@ const PORT = process.env.PORT ?? 3008
 function readNumbersFromExcel(filePath) {
     try {
         const workbook = xlsx.readFile(filePath);
-        const sheet = workbook.Sheets[workbook.SheetNames[0]]; // Primera hoja
-        const data = xlsx.utils.sheet_to_json(sheet); // Convierte la hoja a formato JSON
-        console.log('Datos extraídos del Excel:', data);  // Verifica que los datos se extraen correctamente
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const data = xlsx.utils.sheet_to_json(sheet);
 
-        const phoneNumbers = data.map(row => row.telefonos).filter(Boolean);  // Filtra cualquier valor nulo o vacío
-        console.log('Números de teléfono extraídos:', phoneNumbers);  // Verifica que los números están siendo extraídos correctamente
-        return phoneNumbers;
+        console.log('Datos extraídos del Excel:', data);
+
+        const contacts = data
+            .filter(row => row.telefonos && row.empresa && row.ciudad)
+            .map(row => ({
+                number: row.telefonos.toString(), // Asegura que sea string
+                empresa: row.empresa.trim(),
+                ciudad: row.ciudad.trim()
+            }));
+
+        console.log('Contactos extraídos:', contacts);
+        return contacts;
     } catch (error) {
         console.error('Error leyendo el archivo Excel:', error);
-        throw error;  // Lanza el error para que se maneje en la parte del servidor
+        throw error;
     }
 }
 
@@ -76,11 +84,16 @@ const sendMessageTemplate = async (number, templateName, language, variables = [
 
 // Función para procesar el envío masivo
 const sendBulkMessages = async (phoneNumbers) => {
-    for (const number of phoneNumbers) {
+    for (const contact of phoneNumbers) {
         try {
-            await sendMessageTemplate(number, 'plantillaia', 'es_ES');
+            await sendMessageTemplate(
+                contact.number,
+                'plantilla_distribuidor',
+                'es_ES',
+                [contact.empresa, contact.ciudad]
+            );
         } catch (error) {
-            console.error(`Error inesperado al procesar el número ${number}:`, error);
+            console.error(`Error inesperado al procesar el número ${contact.number}:`, error);
         }
     }
 };
