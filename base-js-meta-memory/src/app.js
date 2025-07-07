@@ -82,22 +82,35 @@ const sendMessageTemplate = async (number, templateName, language, variables = [
     }
 };
 
-// Función para procesar el envío masivo
-const sendBulkMessages = async (phoneNumbers) => {
-    for (const contact of phoneNumbers) {
-        try {
-            await sendMessageTemplate(
-                contact.number,
-                'plantilla_distribuidor',
-                'es_ES',
-                [contact.empresa, contact.ciudad]
-            );
-        } catch (error) {
-            console.error(`Error inesperado al procesar el número ${contact.number}:`, error);
-        }
-    }
+const templateConfig = {
+  plantilla_distribuidor: (contact) => [contact.empresa, contact.ciudad],
+  minorista:      (contact) => [contact.empresa],
+  yoga:       (contact) => [contact.empresa],
 };
 
+//Funcion para procesar el envio masivo
+const sendBulkMessages = async (phoneNumbers, templateName) => {
+  const getTemplateVariables = templateConfig[templateName];
+
+  if (!getTemplateVariables) {
+    console.error(`Plantilla no configurada: ${templateName}`);
+    return;
+  }
+
+  for (const contact of phoneNumbers) {
+    try {
+      const variables = getTemplateVariables(contact);
+      await sendMessageTemplate(
+        contact.number,
+        templateName,
+        'es_ES',
+        variables
+      );
+    } catch (error) {
+      console.error(`Error inesperado al procesar el número ${contact.number}:`, error);
+    }
+  }
+};
 
 const conversationHistories = {};
 
@@ -225,46 +238,46 @@ const main = async () => {
     adapterProvider.server.use(cors({ origin: 'http://127.0.0.1:5500' }));
 
     adapterProvider.server.post('/uploadExcel', async (req, res) => {
-        const form = formidable();
-    
-        form.parse(req, (err, fields, files) => {
-            if (err) {
-                console.error('Error procesando la subida:', err);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ success: false, message: 'Error procesando la subida' }));
-            }
-        
-            console.log('Archivos recibidos:', files);  // Esto debería mostrar todos los archivos recibidos
-            const filePath = files.excelFile ? files.excelFile[0]?.filepath : null;  // Asegúrate de acceder a la propiedad correcta
-            
-            if (!filePath) {
-                console.error('No se ha recibido el archivo');
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({ success: false, message: 'No se ha recibido el archivo' }));
-            }
-            
-            console.log('Archivo recibido con éxito, ruta:', filePath);
-        
-            // Proceder con la lectura del archivo
-            try {
-                const phoneNumbers = readNumbersFromExcel(filePath);  // Lógica para leer números del archivo
-                sendBulkMessages(phoneNumbers)  // Enviar mensajes en masa
-                    .then(() => {
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ success: true, message: 'Archivo procesado y mensajes enviados' }));
-                    })
-                    .catch((error) => {
-                        console.error('Error enviando mensajes:', error);
-                        res.writeHead(500, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ success: false, message: 'Error enviando mensajes' }));
-                    });
-            } catch (error) {
-                console.error('Error procesando archivo:', error);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, message: 'Error procesando el archivo' }));
-            }
+    const form = formidable();
+
+    form.parse(req, async (err, fields, files) => {
+        if (err) {
+            console.error('Error procesando la subida:', err);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: false, message: 'Error procesando la subida' }));
+        }
+
+        const filePath = files.excelFile ? files.excelFile[0]?.filepath : null;
+        const templateName = fields.template?.[0];
+
+        if (!filePath) {
+            console.error('No se ha recibido el archivo');
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: false, message: 'No se ha recibido el archivo' }));
+        }
+
+        if (!templateName) {
+            console.error('No se ha recibido el nombre de la plantilla');
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ success: false, message: 'Falta el nombre de la plantilla' }));
+        }
+
+        console.log('Archivo recibido:', filePath);
+        console.log('Plantilla seleccionada:', templateName);
+
+        try {
+            const phoneNumbers = readNumbersFromExcel(filePath); // Tu función para leer contactos
+            await sendBulkMessages(phoneNumbers, templateName);  // Ahora incluye la plantilla
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'Archivo procesado y mensajes enviados' }));
+        } catch (error) {
+            console.error('Error procesando archivo:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: 'Error procesando el archivo' }));
+        }
     });
-    });        
+});
+
     
     httpServer(+PORT)
 }
