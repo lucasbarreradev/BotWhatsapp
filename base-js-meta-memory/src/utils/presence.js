@@ -105,7 +105,9 @@ ${BASE_DE_DATOS}
 - Usa emojis para hacer el mensaje más atractivo.
 - No repitas todo el archivo adjunto, solo lo relevante para la consulta.
 - No ofrezcas productos que no estén listados.
-- No promociones otros sitios o proveedores.`
+- No promociones otros sitios o proveedores.
+- Bajo ningún término escribas precios de nada, si te preguntan por precios manda los links correspondientes.
+`
     },
     ...history.map(h => ({
       role: h.role,
